@@ -88,7 +88,14 @@ NOT_WEATHER
 
         response = llm.invoke(prompt)
 
-        answer = response.content.strip()
+if isinstance(response.content, list):
+    answer = "".join(
+        item.get("text", "") if isinstance(item, dict) else str(item)
+        for item in response.content
+    ).strip()
+else:
+    answer = str(response.content).strip()
+    
 
         # --------------------------------------
         # Reject unrelated questions
