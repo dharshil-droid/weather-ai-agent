@@ -1,4 +1,3 @@
-
 import os
 import requests
 import gradio as gr
@@ -131,3 +130,52 @@ NOT_WEATHER
     except Exception as e:
 
         return f"Sorry, something went wrong: {str(e)}"
+
+
+# ==========================================
+# GRADIO INTERFACE
+# ==========================================
+
+demo = gr.Interface(
+    fn=chat,
+
+    inputs=gr.Textbox(
+        label="Ask about weather",
+        placeholder="Example: What is the weather in Hyderabad?"
+    ),
+
+    outputs=gr.Markdown(
+        label="Weather Agent"
+    ),
+
+    title="🌦️ Weather AI Agent",
+
+    description=(
+        "Ask me about the weather or climate of places. "
+        "I only answer weather and climate related questions."
+    ),
+
+    examples=[
+        "What is the weather in Hyderabad?",
+        "Is it raining in Delhi?",
+        "What is the temperature in Mumbai?",
+        "What is the weather like in Chennai?"
+    ]
+)
+
+
+# ==========================================
+# START APP
+# ==========================================
+
+if __name__ == "__main__":
+
+    port = int(os.environ.get("PORT", "10000"))
+
+    print(f"Starting Weather AI Agent on port {port}")
+
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=port,
+        show_error=True
+    )
