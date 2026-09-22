@@ -4,8 +4,6 @@ import requests
 import gradio as gr
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.tools import tool
-from langchain.agents import create_agent
 
 
 # ==========================================
@@ -17,7 +15,17 @@ WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY")
 
 
 # ==========================================
-# WEATHER FUNCTION
+# GEMINI MODEL
+# ==========================================
+
+llm = ChatGoogleGenerativeAI(
+    model="gemini-3.6-flash",
+    google_api_key=GEMINI_API_KEY
+)
+
+
+# ==========================================
+# WEATHER API
 # ==========================================
 
 def get_weather(city):
@@ -33,90 +41,22 @@ def get_weather(city):
     response = requests.get(url, params=params)
 
     if response.status_code != 200:
-        return {
-            "error": "Could not find weather information for this city."
-        }
+        return None
 
     data = response.json()
 
-    temperature = data["main"]["temp"]
-    feels_like = data["main"]["feels_like"]
-    humidity = data["main"]["humidity"]
-    description = data["weather"][0]["description"]
-    wind_speed = data["wind"]["speed"]
-
     return {
-        "city": city,
-        "temperature": temperature,
-        "feels_like": feels_like,
-        "humidity": humidity,
-        "description": description,
-        "wind_speed": wind_speed
+        "city": data["name"],
+        "temperature": data["main"]["temp"],
+        "feels_like": data["main"]["feels_like"],
+        "humidity": data["main"]["humidity"],
+        "description": data["weather"][0]["description"],
+        "wind_speed": data["wind"]["speed"]
     }
 
 
 # ==========================================
-# WEATHER TOOL
-# ==========================================
-
-@tool
-def weather_tool(city: str):
-    """Get current weather information for a city."""
-    return get_weather(city)
-
-
-# ==========================================
-# GEMINI MODEL
-# ==========================================
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.6-flash",
-    google_api_key=GEMINI_API_KEY
-)
-
-
-# ==========================================
-# AI AGENT
-# ==========================================
-
-agent = create_agent(
-    model=llm,
-    tools=[weather_tool],
-
-    system_prompt="""
-You are a specialized Weather AI Agent.
-
-You ONLY answer questions related to weather and climate
-of places.
-
-You can answer questions about:
-- Current weather
-- Temperature
-- Humidity
-- Rain
-- Wind
-- Weather conditions
-- Weather forecasts
-- Weather comparisons between places
-- Basic climate information
-
-When the user asks about current weather,
-always use the weather_tool.
-
-If the question is unrelated to weather or climate,
-respond:
-
-"Sorry, I can only answer questions related to weather and climate."
-
-Never make up current weather information.
-
-Keep answers simple and easy to understand.
-"""
-)
-
-
-# ==========================================
-# CHAT FUNCTION
+# AI CHAT FUNCTION
 # ==========================================
 
 def chat(user_message):
@@ -126,16 +66,75 @@ def chat(user_message):
 
     try:
 
-        result = agent.invoke({
-            "messages": [
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ]
-        })
+        # Gemini is used only once to understand the question
+        prompt = f"""
+You are a weather question classifier.
 
-        return result["messages"][-1].content
+User question:
+{user_message}
+
+If the question is about weather or climate,
+extract the city name.
+
+Return ONLY:
+
+WEATHER: city_name
+
+If the question is NOT about weather or climate,
+return ONLY:
+
+NOT_WEATHER
+"""
+
+        response = llm.invoke(prompt)
+
+        answer = response.content.strip()
+
+        # --------------------------------------
+        # Reject unrelated questions
+        # --------------------------------------
+
+        if answer == "NOT_WEATHER":
+
+            return "Sorry, I can only answer questions related to weather and climate."
+
+
+        # --------------------------------------
+        # Extract city
+        # --------------------------------------
+
+        if answer.startswith("WEATHER:"):
+
+            city = answer.replace("WEATHER:", "").strip()
+
+            weather = get_weather(city)
+
+            if weather is None:
+
+                return "Sorry, I could not find weather information for that city."
+
+
+            # --------------------------------------
+            # Weather result
+            # --------------------------------------
+
+            return f"""
+### 🌦️ Weather in {weather['city']}
+
+🌡️ **Temperature:** {weather['temperature']} °C
+
+🌡️ **Feels like:** {weather['feels_like']} °C
+
+☁️ **Condition:** {weather['description'].capitalize()}
+
+💧 **Humidity:** {weather['humidity']}%
+
+💨 **Wind speed:** {weather['wind_speed']} m/s
+"""
+
+
+        return "Sorry, I couldn't understand the question."
+
 
     except Exception as e:
 
