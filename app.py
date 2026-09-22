@@ -66,7 +66,6 @@ def chat(user_message):
 
     try:
 
-        # Gemini is used only once to understand the question
         prompt = f"""
 You are a weather question classifier.
 
@@ -88,42 +87,30 @@ NOT_WEATHER
 
         response = llm.invoke(prompt)
 
-if isinstance(response.content, list):
-    answer = "".join(
-        item.get("text", "") if isinstance(item, dict) else str(item)
-        for item in response.content
-    ).strip()
-else:
-    answer = str(response.content).strip()
-    
+        # Handle Gemini response
+        if isinstance(response.content, list):
+            answer = "".join(
+                item.get("text", "") if isinstance(item, dict) else str(item)
+                for item in response.content
+            ).strip()
+        else:
+            answer = str(response.content).strip()
 
-        # --------------------------------------
+        print("Gemini classification:", answer)
+
         # Reject unrelated questions
-        # --------------------------------------
-
-        if answer == "NOT_WEATHER":
-
+        if answer.upper() == "NOT_WEATHER":
             return "Sorry, I can only answer questions related to weather and climate."
 
-
-        # --------------------------------------
         # Extract city
-        # --------------------------------------
+        if answer.upper().startswith("WEATHER:"):
 
-        if answer.startswith("WEATHER:"):
-
-            city = answer.replace("WEATHER:", "").strip()
+            city = answer.split(":", 1)[1].strip()
 
             weather = get_weather(city)
 
             if weather is None:
-
                 return "Sorry, I could not find weather information for that city."
-
-
-            # --------------------------------------
-            # Weather result
-            # --------------------------------------
 
             return f"""
 ### 🌦️ Weather in {weather['city']}
@@ -139,55 +126,8 @@ else:
 💨 **Wind speed:** {weather['wind_speed']} m/s
 """
 
-
         return "Sorry, I couldn't understand the question."
-
 
     except Exception as e:
 
         return f"Sorry, something went wrong: {str(e)}"
-
-
-# ==========================================
-# GRADIO INTERFACE
-# ==========================================
-
-demo = gr.Interface(
-
-    fn=chat,
-
-    inputs=gr.Textbox(
-        label="Ask about weather",
-        placeholder="Example: What is the weather in Hyderabad?"
-    ),
-
-    outputs=gr.Markdown(
-        label="Weather Agent"
-    ),
-
-    title="🌦️ Weather AI Agent",
-
-    description=(
-        "Ask me about the weather or climate of places. "
-        "I only answer weather and climate related questions."
-    ),
-
-    examples=[
-        "What is the weather in Hyderabad?",
-        "Is it raining in Delhi?",
-        "What is the temperature in Mumbai?",
-        "What is the weather like in Chennai?"
-    ]
-)
-
-
-# ==========================================
-# START APP
-# ==========================================
-
-port = int(os.environ.get("PORT", 7860))
-
-demo.launch(
-    server_name="0.0.0.0",
-    server_port=port
-)
